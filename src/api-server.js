@@ -5,6 +5,10 @@ const { DB } = require('./db');
 const { User } = require('./types/user');
 const {SessionToken} = require('./types/session-token');
 const dayjs = require('dayjs');
+const { BlockController } = require('./block-controller');
+const { AccountController } = require('./account-controller');
+const bodyParser = require('body-parser');
+const {POCKET_MINIMUM_STAKE} = require('./constants');
 
 class APIServer {
 
@@ -14,7 +18,23 @@ class APIServer {
    */
   _db = null;
 
+  /**
+   * @type {number}
+   * @private
+   */
   _port = 3300;
+
+  /**
+   * @type {BlockController|null}
+   * @private
+   */
+  _blockController = null;
+
+  /**
+   * @type {AccountController|null}
+   * @private
+   */
+  _accountController = null;
 
   /**
    * @type {(info: string) => void}
@@ -33,12 +53,16 @@ class APIServer {
   /**
    * @param {number} port
    * @param {DB} db
+   * @param {BlockController} blockController
+   * @param {AccountController} accountController
    * @param {(info: string) => void} logInfo
    * @param {(err: string|Error) => void} handleError
    */
-  constructor(port, db, logInfo, handleError) {
+  constructor(port, db, blockController, accountController, logInfo, handleError) {
     this._port = port || this._port;
     this._db = db;
+    this._blockController = blockController;
+    this._accountController = accountController;
     this._logInfo = logInfo || this._logInfo;
     this._handleError = handleError || this._handleError;
     _.bindAll(this, [
@@ -70,6 +94,9 @@ class APIServer {
   start() {
     return new Promise(resolve => {
       express()
+        .use(bodyParser.urlencoded({ extended: false }))
+        .use(bodyParser.text())
+        .use(bodyParser.json())
         .use(cors())
         .get('/', (req, res) => {
           res.sendStatus(200);
@@ -147,7 +174,30 @@ class APIServer {
       const isAuthorized = await this._isAuthorized(req);
       if(!isAuthorized)
         return res.sendStatus(401);
-      res.sendStatus(200);
+      const { body } = req;
+      const isJson = req.is('application/json');
+      if(!isJson || !body) {
+        res.status(400);
+        res.send('Request must be of type application/json and include a valid JSON body.');
+      } else if(!body.password || !_.isString(body.password)) {
+        res.status(400);
+        res.send('Request body must include a password string.');
+      }  else if(!body.stakeAmount || !_.isString(body.stakeAmount)) {
+        res.status(400);
+        res.send('Request body must include a stakeAmount string.');
+      } else if(BigInt(body.stakeAmount) < POCKET_MINIMUM_STAKE) {
+        res.status(400);
+        res.send(`stakeAmount must be at least ${POCKET_MINIMUM_STAKE.toString(10)} POKT.`);
+      } else {
+        const { password, stakeAmount } = body;
+        const account = await this._accountController.create(password);
+        const balanceRequired = (BigInt(stakeAmount) + BigInt(1)).toString(10);
+        res.type('application/json');
+        res.send({
+          ...account,
+          balanceRequired,
+        });
+      }
     } catch(err) {
       this._handleError(err);
       res.sendStatus(500);

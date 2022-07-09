@@ -1,13 +1,14 @@
 const fs = require('fs-extra');
 const path = require('path');
 const { DataStore } = require('./data-store');
-const {BlockController} = require('./block-controller');
+const { BlockController } = require('./block-controller');
 const _ = require('lodash');
 const { createLogger, timeout } = require('./util');
 const {APIServer} = require('./api-server');
-const {port} = require('./constants');
+const { PORT } = require('./constants');
 const {DB} = require('./db');
 const { Configuration, HttpRpcProvider, Pocket } = require('@pokt-network/pocket-js');
+const { AccountController } = require('./account-controller');
 
 const dataDir = path.resolve(__dirname, '../data');
 fs.ensureDirSync(dataDir);
@@ -39,18 +40,20 @@ const handleError = err => {
 
     const dispatcher = new URL(process.env.POCKET_ENDPOINT);
     const configuration = new Configuration(5, 1000, 0, 40000, undefined, undefined, undefined, undefined, undefined, undefined, false);
-    return new Pocket([dispatcher], new HttpRpcProvider(dispatcher), configuration);
+    const pocket = new Pocket([dispatcher], new HttpRpcProvider(dispatcher), configuration);
 
     // Start the block controller
 
-    const blockController = new BlockController(dataStore, handleError);
+    const blockController = new BlockController(pocket, handleError);
     blockController.on(BlockController.events.BLOCK_INCREASE, newBlock => {
       console.log('Block', newBlock);
     });
     await blockController.initialize();
     await timeout();
 
-    const server = new APIServer(port, db, str => logger.info(str), handleError);
+    const accountController = new AccountController(pocket);
+
+    const server = new APIServer(PORT, db, blockController, accountController, str => logger.info(str), handleError);
     await server.start();
 
   } catch(err) {

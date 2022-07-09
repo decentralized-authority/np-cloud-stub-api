@@ -1,5 +1,7 @@
 const { dataStoreKeys } = require('./constants');
 const { EventEmitter } = require('events');
+const { Pocket } = require('@pokt-network/pocket-js');
+const _ = require('lodash');
 
 class BlockController extends EventEmitter {
 
@@ -11,7 +13,7 @@ class BlockController extends EventEmitter {
    * @type {number}
    * @private
    */
-  _blockInterval = 30000;
+  _interval = 10000;
 
   /**
    * @type {number}
@@ -20,10 +22,10 @@ class BlockController extends EventEmitter {
   _block = 0;
 
   /**
-   * @type {DataStore|null}
+   * @type {Pocket|null}
    * @private
    */
-  _dataStore = null;
+  _pocket = null;
 
   /**
    * @type {(err: any) => void}
@@ -32,12 +34,12 @@ class BlockController extends EventEmitter {
   _handleError = console.error;
 
   /**
-   * @param {DataStore} dataStore
+   * @param {Pocket} pocket
    * @param {(err: any) => void} handleError
    */
-  constructor(dataStore, handleError) {
+  constructor(pocket, handleError) {
     super();
-    this._dataStore = dataStore;
+    this._pocket = pocket;
     this._handleError = handleError || this._handleError;
   }
 
@@ -45,23 +47,28 @@ class BlockController extends EventEmitter {
    * @returns {Promise<void>}
    */
   async initialize() {
-    this._block = this._dataStore.get(dataStoreKeys.BLOCK) || 12344;
-    await this._increaseBlock();
+    await this._checkBlockHeight();
     setInterval(() => {
-      this._increaseBlock()
+      this._checkBlockHeight()
         .catch(this._handleError);
-    }, this._blockInterval);
+    }, this._interval);
   }
 
-  /**
-   * @returns {Promise<number>}
-   * @private
-   */
-  async _increaseBlock() {
-    this._block++;
-    await this._dataStore.set(dataStoreKeys.BLOCK, this._block);
-    this.emit(BlockController.events.BLOCK_INCREASE, this._block);
-    return this._block;
+  async _checkBlockHeight() {
+    try {
+      const res = await this._pocket.rpc().query.getHeight();
+      if(_.isError(res)) {
+        throw res;
+      } else {
+        const height = Number(res.height);
+        if(height > this._block) {
+          this._block = height;
+          this.emit(BlockController.events.BLOCK_INCREASE, height);
+        }
+      }
+    } catch(err) {
+      this._handleError(err);
+    }
   }
 
   /**
