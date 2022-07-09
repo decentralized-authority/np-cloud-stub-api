@@ -1,6 +1,7 @@
 const _ = require('lodash');
-const { Account, Pocket } = require('@pokt-network/pocket-js');
+const { Account, CoinDenom, Pocket } = require('@pokt-network/pocket-js');
 const uuid = require('uuid');
+const {TRANSACTION_FEE_UPOKT} = require('./constants');
 
 class AccountController {
 
@@ -53,6 +54,25 @@ class AccountController {
       throw res;
     const { balance } = res;
     return (balance / BigInt(1000000)).toString(10);
+  }
+
+  /**
+   * @param {string} privateKey
+   * @param {string} amount
+   * @param {string} fromAddress
+   * @param {string} toAddress
+   * @returns {Promise<string>}
+   */
+  async send(privateKey, amount, fromAddress, toAddress) {
+    const transactionSender = await this._pocket.withPrivateKey(privateKey);
+    if(_.isError(transactionSender))
+      throw transactionSender;
+    const rawTxResponse = await transactionSender
+      .send(fromAddress, toAddress, (BigInt(amount) * BigInt(1000000)).toString(10))
+      .submit('testnet', TRANSACTION_FEE_UPOKT, CoinDenom.Upokt);
+    if(_.isError(rawTxResponse))
+      throw rawTxResponse;
+    return rawTxResponse.hash;
   }
 
 }

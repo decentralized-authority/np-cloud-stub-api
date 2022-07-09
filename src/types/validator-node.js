@@ -1,4 +1,4 @@
-class Node {
+class ValidatorNode {
 
   /**
    * @type {string}
@@ -61,7 +61,27 @@ class Node {
   url = '';
 
   /**
-   * @param {Node} data
+   * @type {string}
+   */
+  user = '';
+
+  /**
+   * @type {string}
+   */
+  balanceRequired = '';
+
+  /**
+   * @type {string}
+   */
+  password = '';
+
+  /**
+   * @type {string} stakeTx
+   */
+  stakeTx = '';
+
+  /**
+   * @param {ValidatorNode} data
    */
   constructor(data = {}) {
     Object.assign(this, data);
@@ -69,4 +89,4 @@ class Node {
 
 }
 
-module.exports.Node = Node;
+module.exports.ValidatorNode = ValidatorNode;

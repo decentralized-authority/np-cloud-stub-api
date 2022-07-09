@@ -42,16 +42,44 @@ const handleError = err => {
     const configuration = new Configuration(5, 1000, 0, 40000, undefined, undefined, undefined, undefined, undefined, undefined, false);
     const pocket = new Pocket([dispatcher], new HttpRpcProvider(dispatcher), configuration);
 
-    // Start the block controller
-
     const blockController = new BlockController(pocket, handleError);
-    blockController.on(BlockController.events.BLOCK_INCREASE, newBlock => {
-      console.log('Block', newBlock);
-    });
     await blockController.initialize();
-    await timeout();
-
     const accountController = new AccountController(pocket);
+
+    blockController.on(BlockController.events.BLOCK_INCREASE, async newBlock => {
+      console.log('Block', newBlock);
+      const nodes = await db.nodes.find({staked: false});
+      const balances = await Promise
+        .all(nodes.map(n => accountController.getBalance(n.address)));
+      for(let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const balance = BigInt(balances[i]);
+        const balanceRequired = BigInt(n.balanceRequired);
+        const stake = balanceRequired - BigInt(1);
+        if(n.stakeTx) {
+          await db.nodes.update({address: n.address}, {$set: {
+            staked: true,
+            stakedAmount: stake.toString(10),
+            stakedBlock: (Number(newBlock) - 1).toString(10),
+          }});
+        } else if(balance < balanceRequired) {
+          continue;
+        } else { // balance is greater than balance required
+          logger.info(`Stake ${n.address}`);
+          const stakeTx = await accountController.send(
+            n.rawPrivateKey,
+            stake.toString(10),
+            n.address,
+            dataStore.get(dataStoreKeys.ACCOUNT).address,
+          );
+          await db.nodes.update({address: n.address}, {$set: {
+            stakeTx,
+          }});
+        }
+      }
+    });
+
+    await timeout();
 
     let account = dataStore.get(dataStoreKeys.ACCOUNT);
     if(!account) {

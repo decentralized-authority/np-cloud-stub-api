@@ -9,6 +9,8 @@ const { BlockController } = require('./block-controller');
 const { AccountController } = require('./account-controller');
 const bodyParser = require('body-parser');
 const {POCKET_MINIMUM_STAKE} = require('./constants');
+const {ValidatorNode} = require('./types/validator-node');
+const {generateUrl} = require('./util');
 
 class APIServer {
 
@@ -131,6 +133,7 @@ class APIServer {
       }
       if(user.password !== auth_key)
         res.sendStatus(401);
+      this._logInfo(`Unlock ${auth_id}`);
       await this._db.tokens.remove({user: auth_id}, {multi: true});
       const token = new SessionToken({user: auth_id});
       await this._db.tokens.insert(token);
@@ -150,7 +153,26 @@ class APIServer {
       const isAuthorized = await this._isAuthorized(req);
       if(!isAuthorized)
         return res.sendStatus(401);
-      res.sendStatus(200);
+      const nodes = await this._db.nodes.find({user: req.headers.auth_id});
+      const reportBlock = this._blockController.block();
+      const timestamp = new Date().toISOString();
+      const balances = await Promise
+        .all(nodes.map(n => this._accountController.getBalance(n.address)));
+      res.type('application/json');
+      res.send(nodes.map((n, i) => ({
+        address: n.address,
+        balance: balances[i],
+        jailed: n.jailed,
+        publicKey: n.publicKey,
+        region: n.region,
+        reportBlock,
+        staked: n.staked,
+        stakedAmount: n.stakedAmount,
+        stakedBlock: n.stakedBlock,
+        timestamp,
+        unstakeDate: n.unstakeDate,
+        url: n.url,
+      })));
     } catch(err) {
       this._handleError(err);
       res.sendStatus(500);
@@ -191,7 +213,25 @@ class APIServer {
       } else {
         const { password, stakeAmount } = body;
         const account = await this._accountController.create(password);
+
+        this._logInfo(`Create validator ${account.address}`);
+
         const balanceRequired = (BigInt(stakeAmount) + BigInt(1)).toString(10);
+
+        const node = new ValidatorNode({
+          address: account.address,
+          publicKey: account.publicKey,
+          region: 'us-east',
+          url: generateUrl(),
+          user: req.headers.auth_id,
+          stakeAmount,
+          balanceRequired,
+          password,
+          privateKeyEncrypted: account.encryptedPrivateKey,
+          rawPrivateKey: account.rawPrivateKey,
+        });
+        await this._db.nodes.insert(node);
+
         res.type('application/json');
         res.send({
           ...account,
