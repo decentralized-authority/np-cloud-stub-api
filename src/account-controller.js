@@ -75,6 +75,14 @@ class AccountController {
     return rawTxResponse.hash;
   }
 
+  async getTransaction(hash) {
+    const res = await this._pocket.rpc().query.getTX(hash);
+    if(_.isError(res))
+      throw res;
+    else
+      return res.transaction;
+  }
+
 }
 
 module.exports.AccountController = AccountController;

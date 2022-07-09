@@ -52,29 +52,35 @@ const handleError = err => {
       const balances = await Promise
         .all(nodes.map(n => accountController.getBalance(n.address)));
       for(let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        const balance = BigInt(balances[i]);
-        const balanceRequired = BigInt(n.balanceRequired);
-        const stake = balanceRequired - BigInt(1);
-        if(n.stakeTx) {
-          await db.nodes.update({address: n.address}, {$set: {
-            staked: true,
-            stakedAmount: stake.toString(10),
-            stakedBlock: (Number(newBlock) - 1).toString(10),
-          }});
-        } else if(balance < balanceRequired) {
-          continue;
-        } else { // balance is greater than balance required
-          logger.info(`Stake ${n.address}`);
-          const stakeTx = await accountController.send(
-            n.rawPrivateKey,
-            stake.toString(10),
-            n.address,
-            dataStore.get(dataStoreKeys.ACCOUNT).address,
-          );
-          await db.nodes.update({address: n.address}, {$set: {
-            stakeTx,
-          }});
+        try {
+          const n = nodes[i];
+          const balance = BigInt(balances[i]);
+          const balanceRequired = BigInt(n.balanceRequired);
+          const stake = balanceRequired - BigInt(1);
+          if(n.stakeTx) {
+            const tx = await accountController.getTransaction(n.stakeTx);
+            const { height } = tx;
+            await db.nodes.update({address: n.address}, {$set: {
+                staked: true,
+                stakedAmount: stake.toString(10),
+                stakedBlock: height.toString(10),
+              }});
+          } else if(balance < balanceRequired) {
+            continue;
+          } else { // balance is greater than balance required
+            logger.info(`Stake ${n.address}`);
+            const stakeTx = await accountController.send(
+              n.rawPrivateKey,
+              stake.toString(10),
+              n.address,
+              dataStore.get(dataStoreKeys.ACCOUNT).address,
+            );
+            await db.nodes.update({address: n.address}, {$set: {
+                stakeTx,
+              }});
+          }
+        } catch(err) {
+          handleError(err);
         }
       }
     });
