@@ -5,7 +5,7 @@ const { BlockController } = require('./block-controller');
 const _ = require('lodash');
 const { createLogger, timeout } = require('./util');
 const {APIServer} = require('./api-server');
-const { PORT } = require('./constants');
+const { PORT, dataStoreKeys} = require('./constants');
 const {DB} = require('./db');
 const { Configuration, HttpRpcProvider, Pocket } = require('@pokt-network/pocket-js');
 const { AccountController } = require('./account-controller');
@@ -52,6 +52,16 @@ const handleError = err => {
     await timeout();
 
     const accountController = new AccountController(pocket);
+
+    let account = dataStore.get(dataStoreKeys.ACCOUNT);
+    if(!account) {
+      account = await accountController.create(AccountController.generatePassword());
+      await dataStore.set(dataStoreKeys.ACCOUNT, account);
+    }
+    const balance = await accountController.getBalance(account.address);
+
+    logger.info(`API account address ${account.address}`);
+    logger.info(`API account balance ${balance}`);
 
     const server = new APIServer(PORT, db, blockController, accountController, str => logger.info(str), handleError);
     await server.start();

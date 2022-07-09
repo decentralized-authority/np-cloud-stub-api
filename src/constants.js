@@ -1,5 +1,5 @@
 module.exports.dataStoreKeys = {
-  BLOCK: 'BLOCK',
+  ACCOUNT: 'ACCOUNT',
 };
 
 module.exports.PORT = 3300;
