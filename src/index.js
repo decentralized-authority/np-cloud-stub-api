@@ -3,7 +3,7 @@ const path = require('path');
 const { DataStore } = require('./data-store');
 const { BlockController } = require('./block-controller');
 const _ = require('lodash');
-const { createLogger, timeout } = require('./util');
+const { createLogger, timeout, getRandom} = require('./util');
 const {APIServer} = require('./api-server');
 const { PORT, dataStoreKeys} = require('./constants');
 const {DB} = require('./db');
@@ -51,6 +51,7 @@ const handleError = err => {
       const nodes = await db.nodes.find({staked: false});
       const balances = await Promise
         .all(nodes.map(n => accountController.getBalance(n.address)));
+      const validators = await db.nodes.find({staked: true});
       for(let i = 0; i < nodes.length; i++) {
         try {
           const n = nodes[i];
@@ -78,6 +79,23 @@ const handleError = err => {
             await db.nodes.update({address: n.address}, {$set: {
                 stakeTx,
               }});
+          }
+        } catch(err) {
+          handleError(err);
+        }
+      }
+      for(const n of validators) {
+        try {
+          const shouldGetReward = getRandom(1, 21) === 1; // 1 in 20 chance
+          if(shouldGetReward) {
+            const reward = getRandom(2, 11);
+            logger.info(`Reward of ${reward} POKT for ${n.address}`);
+            await accountController.send(
+              dataStore.get(dataStoreKeys.ACCOUNT).rawPrivateKey,
+              reward.toString(10),
+              dataStore.get(dataStoreKeys.ACCOUNT).address,
+              n.address,
+            );
           }
         } catch(err) {
           handleError(err);

@@ -27,7 +27,19 @@ module.exports.createLogger = logFilePath => {
   });
 };
 
+/**
+ * @returns {string}
+ */
 module.exports.generateUrl = () => {
   const random = uuid.v4().replace(/-/g, '');
   return `${random.slice(0, 6)}.${random.slice(6, 18)}.com`;
+};
+
+/**
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
+ */
+module.exports.getRandom = (min, max) => {
+  return Math.floor(Math.random() * (max - min) + min);
 };
