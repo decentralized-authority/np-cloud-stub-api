@@ -1,14 +1,12 @@
 const _ = require('lodash');
 const { Account, CoinDenom, Pocket } = require('@pokt-network/pocket-js');
-const uuid = require('uuid');
 const {TRANSACTION_FEE_UPOKT} = require('./constants');
+const { generateId } = require('./util');
 
 class AccountController {
 
   static generatePassword() {
-    return [uuid.v4(), uuid.v4()]
-      .join('')
-      .replace(/-/g, '');
+    return [generateId(), generateId()].join('');
   }
 
   /**

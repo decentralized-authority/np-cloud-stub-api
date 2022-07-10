@@ -1,27 +1,20 @@
 const fs = require('fs-extra');
-const path = require('path');
 const { DataStore } = require('./data-store');
 const { BlockController } = require('./block-controller');
 const _ = require('lodash');
 const { createLogger, timeout, getRandom} = require('./util');
-const {APIServer} = require('./api-server');
-const { PORT, dataStoreKeys} = require('./constants');
-const {DB} = require('./db');
+const { APIServer } = require('./api-server');
+const { DATA_DIR, DATA_PATH, LOGS_DIR, LOG_PATH, PORT, dataStoreKeys} = require('./constants');
+const { DB } = require('./db');
 const { Configuration, HttpRpcProvider, Pocket } = require('@pokt-network/pocket-js');
 const { AccountController } = require('./account-controller');
 
-const dataDir = path.resolve(__dirname, '../data');
-fs.ensureDirSync(dataDir);
-const dataPath = path.join(dataDir, 'data.json');
+fs.ensureDirSync(DATA_DIR);
+fs.ensureDirSync(LOGS_DIR);
 
-const logsDir = path.resolve(__dirname, '../logs');
-fs.ensureDirSync(logsDir);
-const logFilePath = path.join(logsDir, 'server.log');
-const logger = createLogger(logFilePath);
-
-const db = new DB(dataDir);
-
-const dataStore = new DataStore(dataPath);
+const logger = createLogger(LOG_PATH);
+const db = new DB(DATA_DIR);
+const dataStore = new DataStore(DATA_PATH);
 
 const handleError = err => {
   if(_.isString(err)) {

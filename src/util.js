@@ -6,6 +6,14 @@ module.exports.timeout = (ms = 0) => {
 };
 
 /**
+ * @returns {string}
+ */
+const generateId = () => {
+  return uuid.v4().replace(/-/g, '');
+};
+module.exports.generateId = generateId;
+
+/**
  * @param {string} logFilePath
  * @returns {winston.Logger}
  */
@@ -31,7 +39,7 @@ module.exports.createLogger = logFilePath => {
  * @returns {string}
  */
 module.exports.generateUrl = () => {
-  const random = uuid.v4().replace(/-/g, '');
+  const random = generateId();
   return `${random.slice(0, 6)}.${random.slice(6, 18)}.com`;
 };
 

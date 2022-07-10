@@ -8,12 +8,18 @@ class User {
   /**
    * @type {string}
    */
+  address = '';
+
+  /**
+   * @type {string}
+   */
   password = '';
 
   /**
    * @param {User} data
    */
   constructor(data) {
+    this.address = data.address;
     this.id = data.id;
     this.password = data.password;
   }

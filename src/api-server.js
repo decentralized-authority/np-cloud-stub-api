@@ -3,14 +3,15 @@ const cors = require('cors');
 const _ = require('lodash');
 const { DB } = require('./db');
 const { User } = require('./types/user');
-const {SessionToken} = require('./types/session-token');
+const { SessionToken } = require('./types/session-token');
 const dayjs = require('dayjs');
 const { BlockController } = require('./block-controller');
 const { AccountController } = require('./account-controller');
 const bodyParser = require('body-parser');
-const {POCKET_MINIMUM_STAKE} = require('./constants');
-const {ValidatorNode} = require('./types/validator-node');
-const {generateUrl} = require('./util');
+const { POCKET_MINIMUM_STAKE } = require('./constants');
+const { ValidatorNode } = require('./types/validator-node');
+const { generateUrl, generateId} = require('./util');
+const { Hex } = require('@pokt-network/pocket-js');
 
 class APIServer {
 
@@ -68,6 +69,7 @@ class APIServer {
     this._logInfo = logInfo || this._logInfo;
     this._handleError = handleError || this._handleError;
     _.bindAll(this, [
+      'register',
       'unlock',
       'getNodes',
       'getNode',
@@ -103,6 +105,7 @@ class APIServer {
         .get('/', (req, res) => {
           res.sendStatus(200);
         })
+        .post('/api/v1/register', this.register)
         .post('/api/v1/unlock', this.unlock)
         .get('/api/v1/nodes', this.getNodes)
         .get('/api/v1/node/:address', this.getNode)
@@ -115,24 +118,64 @@ class APIServer {
     });
   }
 
+  async register(req, res) {
+    try {
+      const { body } = req;
+      const isJson = req.is('application/json');
+      if(!isJson || !body) {
+        res.status(400);
+        res.send('Request must be of type application/json and contain a valid JSON body.');
+      } else if(!body.invitation || !_.isString(body.invitation)) {
+        res.status(400);
+        res.send('Request body must include an invitation string.');
+      } else if(!body.password || !_.isString(body.password)) {
+        res.status(400);
+        res.send('Request body must include a password string.');
+      } else if(!body.address || !_.isString(body.address)) {
+        res.status(400);
+        res.send('Request body must include an address string.');
+      } else if(!Hex.validateAddress(body.address)) {
+        res.status(400);
+        res.send('Invalid POKT address.');
+      } else {
+        const [ invitation ] = await this._db.invitations.find({invitation: body.invitation});
+        if(!invitation || !invitation.valid) {
+          res.status(401);
+          res.send('No valid invitation found.');
+        } else {
+          const userId = generateId();
+          await this._db.invitations.update({invitation: invitation.invitation}, {$set: {
+              valid: false,
+              redeemedByUser: userId,
+            }});
+          const user = new User({
+            id: userId,
+            address: body.address,
+            password: body.password,
+          });
+          await this._db.users.insert(user);
+          res.type('application/json');
+          res.send({
+            id: userId,
+            password: user.password,
+          });
+        }
+
+      }
+    } catch(err) {
+      this._handleError(err);
+      res.sendStatus(500);
+    }
+  }
+
   async unlock(req, res) {
     try {
       const { auth_id, auth_key } = req.headers;
       if(!auth_id || !auth_key)
-        res.sendStatus(401);
-      const [ rawUser ] = await this._db.users.find({id: auth_id});
-      let user;
-      if(rawUser) {
-        user = new User(rawUser);
-      } else {
-        user = new User({
-          id: auth_id,
-          password: auth_key,
-        });
-        await this._db.users.insert(user);
-      }
-      if(user.password !== auth_key)
-        res.sendStatus(401);
+        return res.sendStatus(401);
+      const [ user ] = await this._db.users.find({id: auth_id});
+      if(!user || (user && user.password !== auth_key))
+        return res.sendStatus(401);
       this._logInfo(`Unlock ${auth_id}`);
       await this._db.tokens.remove({user: auth_id}, {multi: true});
       const token = new SessionToken({user: auth_id});
@@ -200,7 +243,7 @@ class APIServer {
       const isJson = req.is('application/json');
       if(!isJson || !body) {
         res.status(400);
-        res.send('Request must be of type application/json and include a valid JSON body.');
+        res.send('Request must be of type application/json and contain a valid JSON body.');
       } else if(!body.password || !_.isString(body.password)) {
         res.status(400);
         res.send('Request body must include a password string.');

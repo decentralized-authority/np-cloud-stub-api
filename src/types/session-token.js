@@ -1,5 +1,5 @@
-const uuid = require('uuid');
 const dayjs = require('dayjs');
+const { generateId } = require('../util');
 
 class SessionToken {
 
@@ -11,7 +11,7 @@ class SessionToken {
   /**
    * @type {string}
    */
-  token = uuid.v4().replace(/-/g, '');
+  token = generateId();
 
   /**
    * @type {string}
