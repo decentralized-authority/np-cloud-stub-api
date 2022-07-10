@@ -227,7 +227,27 @@ class APIServer {
       const isAuthorized = await this._isAuthorized(req);
       if(!isAuthorized)
         return res.sendStatus(401);
-      res.sendStatus(200);
+      const [ n ] = await this._db.nodes.find({address: req.params.address, user: req.headers.auth_id});
+      if(!n)
+        return res.sendStatus(404);
+      const reportBlock = this._blockController.block();
+      const timestamp = new Date().toISOString();
+      const balance = await this._accountController.getBalance(n.address);
+      res.type('application/json');
+      res.send({
+        address: n.address,
+        balance: balance,
+        jailed: n.jailed,
+        publicKey: n.publicKey,
+        region: n.region,
+        reportBlock,
+        staked: n.staked,
+        stakedAmount: n.stakedAmount,
+        stakedBlock: n.stakedBlock,
+        timestamp,
+        unstakeDate: n.unstakeDate,
+        url: n.url,
+      });
     } catch(err) {
       this._handleError(err);
       res.sendStatus(500);
