@@ -12,6 +12,9 @@ const { POCKET_MINIMUM_STAKE } = require('./constants');
 const { ValidatorNode } = require('./types/validator-node');
 const { generateUrl, generateId} = require('./util');
 const { Hex } = require('@pokt-network/pocket-js');
+const math = require('mathjs');
+
+const { bignumber } = math;
 
 class APIServer {
 
@@ -270,16 +273,16 @@ class APIServer {
       }  else if(!body.stakeAmount || !_.isString(body.stakeAmount)) {
         res.status(400);
         res.send('Request body must include a stakeAmount string.');
-      } else if(BigInt(body.stakeAmount) < POCKET_MINIMUM_STAKE) {
+      } else if(math.smaller(bignumber(body.stakeAmount), POCKET_MINIMUM_STAKE)) {
         res.status(400);
-        res.send(`stakeAmount must be at least ${POCKET_MINIMUM_STAKE.toString(10)} POKT.`);
+        res.send(`stakeAmount must be at least ${POCKET_MINIMUM_STAKE.toString()} POKT.`);
       } else {
         const { password, stakeAmount } = body;
         const account = await this._accountController.create(password);
 
         this._logInfo(`Create validator ${account.address}`);
 
-        const balanceRequired = (BigInt(stakeAmount) + BigInt(1)).toString(10);
+        const balanceRequired = math.add(bignumber(stakeAmount), bignumber(1)).toString();
 
         const node = new ValidatorNode({
           address: account.address,

@@ -8,6 +8,10 @@ const { DATA_DIR, DATA_PATH, LOGS_DIR, LOG_PATH, PORT, dataStoreKeys} = require(
 const { DB } = require('./db');
 const { Configuration, HttpRpcProvider, Pocket } = require('@pokt-network/pocket-js');
 const { AccountController } = require('./account-controller');
+const { CronJob } = require('cron');
+const math = require('mathjs');
+
+const { bignumber } = math;
 
 fs.ensureDirSync(DATA_DIR);
 fs.ensureDirSync(LOGS_DIR);
@@ -48,24 +52,24 @@ const handleError = err => {
       for(let i = 0; i < nodes.length; i++) {
         try {
           const n = nodes[i];
-          const balance = BigInt(balances[i]);
-          const balanceRequired = BigInt(n.balanceRequired);
-          const stake = balanceRequired - BigInt(1);
+          const balance = bignumber(balances[i]);
+          const balanceRequired = bignumber(n.balanceRequired);
+          const stake = math.subtract(balanceRequired, bignumber(1));
           if(n.stakeTx) {
             const tx = await accountController.getTransaction(n.stakeTx);
             const { height } = tx;
             await db.nodes.update({address: n.address}, {$set: {
                 staked: true,
-                stakedAmount: stake.toString(10),
+                stakedAmount: stake.toString(),
                 stakedBlock: height.toString(10),
               }});
-          } else if(balance < balanceRequired) {
+          } else if(math.smaller(balance, balanceRequired)) {
             continue;
           } else { // balance is greater than balance required
             logger.info(`Stake ${n.address}`);
             const stakeTx = await accountController.send(
               n.rawPrivateKey,
-              stake.toString(10),
+              stake.toString(),
               n.address,
               dataStore.get(dataStoreKeys.ACCOUNT).address,
             );
@@ -79,7 +83,8 @@ const handleError = err => {
       }
       for(const n of validators) {
         try {
-          const shouldGetReward = getRandom(1, 21) === 1; // 1 in 20 chance
+          // const shouldGetReward = getRandom(1, 11) === 1; // 1 in 10 chance
+          const shouldGetReward = getRandom(1, 4) === 1; // 1 in 3 chance
           if(shouldGetReward) {
             const reward = getRandom(2, 11);
             logger.info(`Reward of ${reward} POKT for ${n.address}`);
@@ -110,6 +115,35 @@ const handleError = err => {
 
     const server = new APIServer(PORT, db, blockController, accountController, str => logger.info(str), handleError);
     await server.start();
+
+    const sweep = async function() {
+      try {
+        const users = await db.users.find({});
+        const nodes = await db.nodes.find({staked: true});
+        for(const n of nodes) {
+          const balance = await accountController.getBalance(n.address);
+          const balanceNum = bignumber(balance);
+          const diff = math.subtract(balanceNum, bignumber('1.01'));
+          if(diff.toNumber() <= 0)
+            continue;
+          const user = users.find(u => u.id === n.user);
+          if(!user)
+            continue;
+          const tx = await accountController.send(n.rawPrivateKey, diff.toString(), n.address, user.address);
+          console.log(`Sweep ${diff.toString()} POKT to ${user.address} with tx ${tx}`);
+        }
+      } catch(err) {
+        handleError(err);
+      }
+    };
+
+    new CronJob(
+      '0 5 0 * * *', // 12:05am every day
+      sweep,
+      null,
+      true,
+      'America/New_York',
+    );
 
   } catch(err) {
     handleError(err);

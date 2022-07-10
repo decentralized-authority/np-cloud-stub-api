@@ -2,6 +2,9 @@ const _ = require('lodash');
 const { Account, CoinDenom, Pocket } = require('@pokt-network/pocket-js');
 const {TRANSACTION_FEE_UPOKT} = require('./constants');
 const { generateId } = require('./util');
+const math = require('mathjs');
+
+const { bignumber } = math;
 
 class AccountController {
 
@@ -51,7 +54,7 @@ class AccountController {
     if(_.isError(res))
       throw res;
     const { balance } = res;
-    return (balance / BigInt(1000000)).toString(10);
+    return math.divide(bignumber(balance.toString()), bignumber('1000000')).toString();
   }
 
   /**
@@ -66,7 +69,7 @@ class AccountController {
     if(_.isError(transactionSender))
       throw transactionSender;
     const rawTxResponse = await transactionSender
-      .send(fromAddress, toAddress, (BigInt(amount) * BigInt(1000000)).toString(10))
+      .send(fromAddress, toAddress, math.multiply(bignumber(amount), bignumber('1000000')).toString())
       .submit('testnet', TRANSACTION_FEE_UPOKT, CoinDenom.Upokt);
     if(_.isError(rawTxResponse))
       throw rawTxResponse;
