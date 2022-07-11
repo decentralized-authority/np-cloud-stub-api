@@ -29,7 +29,7 @@ class DB {
   constructor(dataDir) {
     this.invitations = NEDB.create({filename: path.join(dataDir, 'invitations.db'), timestampData: true});
     this.nodes = NEDB.create({filename: path.join(dataDir, 'nodes.db'), timestampData: true});
-    this.deletedNodes = NEDB.create({filename: path.join(dataDir, 'deleted-nodes.db'), timestampData: true});
+    this. = NEDB.create({filename: path.join(dataDir, 'unstaked-nodes.db'), timestampData: true});
     this.users = NEDB.create({filename: path.join(dataDir, 'users.db'), timestampData: true});
     this.tokens = NEDB.create({filename: path.join(dataDir, 'tokens.db'), timestampData: true});
   }

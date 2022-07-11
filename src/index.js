@@ -82,8 +82,8 @@ const handleError = err => {
           handleError(err);
         }
       }
-      const deletedNodes = await db.deletedNodes.find({});
-      for(const n of deletedNodes.filter(n => n.returnBalance)) {
+      const unstakedNodes = await db.unstakedNodes.find({});
+      for(const n of unstakedNodes.filter(n => n.returnBalance)) {
         try {
           const balance = await accountController.getBalance(n.address);
           if(balance === '0')
@@ -98,7 +98,7 @@ const handleError = err => {
             n.address,
             user.address,
           );
-          await db.deletedNodes.update({address: n.address}, {$set: {
+          await db.unstakedNodes.update({address: n.address}, {$set: {
               returnBalance: false,
             }});
           logger.info(`Balance of ${toReturn} POKT returned from ${n.address} to ${user.address}`);
@@ -118,7 +118,7 @@ const handleError = err => {
                 dataStore.get(dataStoreKeys.ACCOUNT).address,
                 n.address,
               );
-              await db.deletedNodes.insert({
+              await db.unstakedNodes.insert({
                 ...n,
                 returnBalance: true,
               });
