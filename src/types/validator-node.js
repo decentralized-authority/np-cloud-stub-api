@@ -41,9 +41,9 @@ class ValidatorNode {
   stakedAmount = '0';
 
   /**
-   * @type {number}
+   * @type {string}
    */
-  stakedBlock = 0;
+  stakedBlock = '';
 
   /**
    * @type {string}
