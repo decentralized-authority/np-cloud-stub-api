@@ -111,9 +111,9 @@ class APIServer {
         .post('/api/v1/register', this.register)
         .post('/api/v1/unlock', this.unlock)
         .get('/api/v1/nodes', this.getNodes)
+        .post('/api/v1/node/:address/unstake', this.unstakeValidator)
         .get('/api/v1/node/:address', this.getNode)
         .post('/api/v1/stake_validator', this.stakeValidator)
-        .post('/api/v1/unstake_validator', this.unstakeValidator)
         .listen(this._port, () => {
           this._logInfo(`Server listening at port ${this._port}`);
           resolve();
@@ -230,9 +230,13 @@ class APIServer {
       const isAuthorized = await this._isAuthorized(req);
       if(!isAuthorized)
         return res.sendStatus(401);
-      const [ n ] = await this._db.nodes.find({address: req.params.address, user: req.headers.auth_id});
-      if(!n)
-        return res.sendStatus(404);
+      const { address } = req.params;
+      const { auth_id } = req.headers;
+      const [ n ] = await this._db.nodes.find({address, user: auth_id});
+      if(!n) {
+        res.status(404);
+        return res.send(`Node ${address} for user ${auth_id} not found.`);
+      }
       const reportBlock = this._blockController.block();
       const timestamp = new Date().toISOString();
       const balance = await this._accountController.getBalance(n.address);
@@ -315,7 +319,30 @@ class APIServer {
       const isAuthorized = await this._isAuthorized(req);
       if(!isAuthorized)
         return res.sendStatus(401);
-      res.sendStatus(200);
+      const { address } = req.params;
+      const { auth_id } = req.headers;
+      const [ n ] = await this._db.nodes.find({address, user: auth_id});
+      if(!n) {
+        res.status(404);
+        return res.send(`Node ${address} for user ${auth_id} not found.`);
+      }
+      if(!n.staked) {
+        res.status(400);
+        return res.send(`Node ${address} is not staked.`);
+      } else if(n.unstakeDate) {
+        res.status(400);
+        return res.send(`Node ${address} is already scheduled to be unstaked.`);
+      }
+      this._logInfo(`Unstake request for ${n.address}`);
+      // const unstakeDate = dayjs().add(3, 'weeks').toISOString();
+      const unstakeDate = dayjs().add(24, 'hours').toISOString();
+      await this._db.nodes.update({address}, {$set: {unstakeDate}});
+      this._logInfo(`Unstake scheduled for ${n.address} on ${unstakeDate}`);
+      res.type('application/json');
+      res.send({
+        address,
+        unstakeDate,
+      });
     } catch(err) {
       this._handleError(err);
       res.sendStatus(500);

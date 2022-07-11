@@ -10,6 +10,7 @@ const { Configuration, HttpRpcProvider, Pocket } = require('@pokt-network/pocket
 const { AccountController } = require('./account-controller');
 const { CronJob } = require('cron');
 const math = require('mathjs');
+const dayjs = require('dayjs');
 
 const { bignumber } = math;
 
@@ -81,11 +82,50 @@ const handleError = err => {
           handleError(err);
         }
       }
+      const deletedNodes = await db.deletedNodes.find({});
+      for(const n of deletedNodes.filter(n => n.returnBalance)) {
+        try {
+          const balance = await accountController.getBalance(n.address);
+          if(balance === '0')
+            continue;
+          const [ user ] = await db.users.find({id: n.user});
+          if(!user)
+            continue;
+          const toReturn = math.subtract(bignumber(balance), bignumber('0.01')).toString();
+          await accountController.send(
+            n.rawPrivateKey,
+            toReturn,
+            n.address,
+            user.address,
+          );
+          await db.deletedNodes.update({address: n.address}, {$set: {
+              returnBalance: false,
+            }});
+          logger.info(`Balance of ${toReturn} POKT returned from ${n.address} to ${user.address}`);
+        } catch(err) {
+          handleError(err);
+        }
+      }
       for(const n of validators) {
         try {
-          // const shouldGetReward = getRandom(1, 11) === 1; // 1 in 10 chance
-          const shouldGetReward = getRandom(1, 4) === 1; // 1 in 3 chance
-          if(shouldGetReward) {
+          const shouldGetReward = getRandom(1, 11) === 1; // 1 in 10 chance
+          if(n.unstakeDate) {
+            if(dayjs().isAfter(dayjs(n.unstakeDate))) {
+              // Send back stake amount
+              await accountController.send(
+                dataStore.get(dataStoreKeys.ACCOUNT).rawPrivateKey,
+                n.stakedAmount,
+                dataStore.get(dataStoreKeys.ACCOUNT).address,
+                n.address,
+              );
+              await db.deletedNodes.insert({
+                ...n,
+                returnBalance: true,
+              });
+              await db.nodes.remove({address: n.address});
+              logger.info(`Unstake complete for ${n.address}`);
+            }
+          } else if(shouldGetReward) {
             const reward = getRandom(2, 11);
             logger.info(`Reward of ${reward} POKT for ${n.address}`);
             await accountController.send(
